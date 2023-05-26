@@ -1,0 +1,23 @@
+name = "websocket-proxy"
+main = "build/worker/shim.mjs"
+compatibility_date = "2023-03-14"
+
+# replace with your domain info - TODO this might not be required but we added it for ours.
+routes = [
+    { pattern = "p-test.mutinywallet.com/*", zone_id = "2b9268714ce8d1c4431e8046d4ba55d3" }, 
+]
+
+# replace with your KV store info
+# create the queues with `wrangler kv:namespace create NAME` and the same command with the `--preview` flag.
+# put your queue IDs below
+kv_namespaces = [
+  # { binding = "", id = "", preview_id = "" }
+]
+
+[vars]
+WORKERS_RS_VERSION = "0.0.16"
+
+[build]
+
+command = "cargo install --git https://github.com/kflansburg/workers-rs --branch kflansburg/sockets worker-build && worker-build --release"
+#command = "cargo install -q worker-build --version 0.0.9 && worker-build --release"
