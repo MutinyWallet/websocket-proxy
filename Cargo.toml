@@ -27,7 +27,7 @@ async-trait = "0.1.68"
 cfg-if = { version = "0.1.2", optional = true }
 # TODO move to main branch once this merges in
 #worker = {  version = "0.0.13", features = ["queue"] }
-worker = {  git = "https://github.com/kflansburg/workers-rs.git", branch = "kflansburg/sockets", optional = true }
+worker = {  git = "https://github.com/kflansburg/workers-rs.git", rev = "e05d615ba53896faa9f7ecf3db84715d472d1319", optional = true }
 serde = { version = "^1.0", features = ["derive"], optional = true }
 
 # Normal Binary Server

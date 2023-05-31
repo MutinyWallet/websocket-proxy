@@ -32,10 +32,8 @@ pub(crate) fn handle_ws_to_tcp(_req: Request, ctx: RouteContext<()>) -> worker::
 
 fn worker_tcp_connect(addr: std::net::SocketAddr) -> Option<Socket> {
     match ConnectionBuilder::new()
-        .host(&addr.ip().to_string())
-        .port(addr.port())
-        .secure_transport(SecureTransport::Off) // use secure transport
-        .connect()
+        .secure_transport(SecureTransport::Off)
+        .connect(addr.ip().to_string(), addr.port())
     {
         Ok(s) => Some(s),
         Err(e) => {
