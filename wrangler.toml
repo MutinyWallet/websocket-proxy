@@ -4,7 +4,7 @@ compatibility_date = "2023-03-14"
 
 # replace with your domain info - TODO this might not be required but we added it for ours.
 routes = [
-    { pattern = "p-test.mutinywallet.com/*", zone_id = "2b9268714ce8d1c4431e8046d4ba55d3" }, 
+    { pattern = "p.mutinywallet.com/*", zone_id = "2b9268714ce8d1c4431e8046d4ba55d3" }, 
 ]
 
 # replace with your KV store info
