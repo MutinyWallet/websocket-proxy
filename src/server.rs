@@ -6,16 +6,52 @@ use axum::{
     },
     response::IntoResponse,
 };
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpStream,
+    sync::Mutex,
 };
 
-pub(crate) async fn ws_handler(
+struct IdempotencyLockGuard {
+    key: Option<String>,
+    locks: Arc<Mutex<HashMap<String, bool>>>,
+}
+
+impl IdempotencyLockGuard {
+    async fn new(
+        key: Option<String>,
+        locks: Arc<Mutex<HashMap<String, bool>>>,
+    ) -> Result<Self, String> {
+        if let Some(ref key) = key {
+            let mut lock_map = locks.lock().await;
+            if lock_map.get(key).copied().unwrap_or(false) {
+                return Err("Idempotency key already in use".to_string());
+            }
+            lock_map.insert(key.clone(), true);
+        }
+        Ok(Self { key, locks })
+    }
+}
+
+impl Drop for IdempotencyLockGuard {
+    fn drop(&mut self) {
+        if let Some(ref key) = self.key {
+            if let Ok(mut lock_map) = self.locks.try_lock() {
+                lock_map.insert(key.clone(), false);
+            } else {
+                logger::error("Failed to acquire lock to release idempotency key");
+            }
+        }
+    }
+}
+
+pub(crate) fn ws_handler(
     Path((ip, port)): Path<(String, String)>,
     ws: WebSocketUpgrade,
     user_agent: Option<TypedHeader<headers::UserAgent>>,
+    idempotency_key: Option<String>,
+    locks: Arc<Mutex<HashMap<String, bool>>>,
 ) -> impl IntoResponse {
     logger::info(&format!("ip: {ip}, port: {port}"));
     if let Some(TypedHeader(user_agent)) = user_agent {
@@ -23,10 +59,24 @@ pub(crate) async fn ws_handler(
     }
 
     ws.protocols(["binary"])
-        .on_upgrade(move |socket| handle_socket(socket, ip, port))
+        .on_upgrade(move |socket| handle_socket(socket, ip, port, idempotency_key, locks))
 }
 
-pub(crate) async fn handle_socket(mut socket: WebSocket, host: String, port: String) {
+pub(crate) async fn handle_socket(
+    socket: WebSocket,
+    host: String,
+    port: String,
+    idempotency_key: Option<String>,
+    locks: Arc<Mutex<HashMap<String, bool>>>,
+) {
+    let lock_guard = match IdempotencyLockGuard::new(idempotency_key, locks).await {
+        Ok(guard) => guard,
+        Err(e) => {
+            logger::error(&e);
+            return;
+        }
+    };
+
     let server_stream = match connect_to_addr(host, port, server_tcp_connect) {
         Ok(s) => s,
         Err(e) => {
