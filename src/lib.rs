@@ -4,11 +4,25 @@ use worker::{event, Context, Date, Env, Request};
 
 // All imports for server specific things
 #[cfg(feature = "server")]
+use axum::{
+    async_trait,
+    extract::FromRequest,
+    extract::{Path, WebSocketUpgrade},
+    http::{Request, StatusCode},
+    TypedHeader,
+};
+#[cfg(feature = "server")]
 use axum::{routing::get, Router};
+#[cfg(feature = "server")]
+use std::collections::HashMap;
 #[cfg(feature = "server")]
 use std::env;
 #[cfg(feature = "server")]
 use std::net::SocketAddr;
+#[cfg(feature = "server")]
+use std::sync::Arc;
+#[cfg(feature = "server")]
+use tokio::sync::Mutex;
 #[cfg(feature = "server")]
 use tower_http::trace::{DefaultMakeSpan, TraceLayer};
 
@@ -21,6 +35,27 @@ mod cloudflare;
 #[cfg(feature = "server")]
 mod server;
 
+#[cfg(feature = "server")]
+struct IdempotencyKey(Option<String>);
+
+#[cfg(feature = "server")]
+#[async_trait]
+impl<'a, B> FromRequest<(), B> for IdempotencyKey
+where
+    B: Send + 'static,
+{
+    type Rejection = StatusCode;
+
+    async fn from_request(req: Request<B>, _: &()) -> Result<Self, Self::Rejection> {
+        let headers = req.headers().clone();
+        let key = headers
+            .get("Idempotency-Key")
+            .and_then(|v| v.to_str().ok())
+            .map(|s| s.to_string());
+        Ok(IdempotencyKey(key))
+    }
+}
+
 /// Main function for running the program as a server
 #[tokio::main]
 #[cfg(feature = "server")]
@@ -28,8 +63,20 @@ async fn main() {
     println!("Running ln-websocket-proxy");
     tracing_subscriber::fmt::init();
 
+    let locks = Arc::new(Mutex::new(HashMap::new()));
+
     let app = Router::new()
-        .route("/v1/:ip/:port", get(crate::server::ws_handler))
+        .route(
+            "/v1/:ip/:port",
+            get(
+                |path: Path<(String, String)>,
+                 ws: WebSocketUpgrade,
+                 user_agent: Option<TypedHeader<headers::UserAgent>>,
+                 idempotency_key: IdempotencyKey| async move {
+                    server::ws_handler(path, ws, user_agent, idempotency_key.0, locks.clone())
+                },
+            ),
+        )
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
