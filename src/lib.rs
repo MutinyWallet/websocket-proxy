@@ -30,8 +30,6 @@ async fn main() {
 
     let app = Router::new()
         .route("/v1/:ip/:port", get(crate::server::ws_handler))
-        // TODO m2m
-        //.route("/v1/mutiny/:identifier", get(mutiny_ws_handler))
         .layer(
             TraceLayer::new_for_http()
                 .make_span_with(DefaultMakeSpan::default().include_headers(true)),
@@ -68,8 +66,6 @@ pub async fn main(req: Request, env: Env, _ctx: Context) -> worker::Result<worke
     // functionality and a `RouteContext` which you can use to  and get route parameters and
     // Environment bindings like KV Stores, Durable Objects, Secrets, and Variables.
     router
-        // TODO this is for mutiny to mutiny, which is being ignored for now
-        .get("/v1/mutiny/:id", crate::cloudflare::handle_mutiny_to_mutiny)
         .get("/v1/:ip/:port", crate::cloudflare::handle_ws_to_tcp)
         .options("/*catchall", |_, _| crate::cloudflare::empty_response())
         .run(req, env)

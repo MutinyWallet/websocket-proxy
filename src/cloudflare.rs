@@ -107,41 +107,6 @@ async fn handle_server_stream(
     empty_response()
 }
 
-// TODO
-pub(crate) fn handle_mutiny_to_mutiny(
-    _req: Request,
-    _ctx: RouteContext<()>,
-) -> worker::Result<Response> {
-    // For websocket compatibility
-    let pair = WebSocketPair::new()?;
-    let server = pair.server;
-    server.accept()?;
-    logger::debug("accepted websocket, about to spawn event stream");
-    wasm_bindgen_futures::spawn_local(async move {
-        let mut event_stream = server.events().expect("stream error");
-        logger::debug("spawned event stream, waiting for first message..");
-        while let Some(event) = event_stream.next().await {
-            if let Err(e) = event {
-                logger::error(&format!("error parsing some event: {e}"));
-                continue;
-            }
-            match event.expect("received error in websocket") {
-                WebsocketEvent::Message(msg) => {
-                    if msg.text().is_none() {
-                        continue;
-                    };
-                    // TODO parse msg when we support m2m here
-                }
-                WebsocketEvent::Close(_) => {
-                    logger::debug("closing");
-                    break;
-                }
-            }
-        }
-    });
-    Response::from_websocket(pair.client)
-}
-
 pub(crate) fn empty_response() -> worker::Result<Response> {
     Response::empty()?.with_cors(&cors())
 }
